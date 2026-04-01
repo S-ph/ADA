@@ -1,0 +1,4 @@
+[
+  {"venda_id": "V001", "produto_id": "P001", "cliente_id": "C001", "quantidade": 2, "valor": 199.98, "data": "2026-01-15"},
+  {"venda_id": "V002", "produto_id": "P002", "cliente_id": "C002", "quantidade": 1, "valor": 299.99, "data": "2026-01-16"}
+]

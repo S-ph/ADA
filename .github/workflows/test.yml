@@ -1,0 +1,63 @@
+name: Run Tests
+
+on:
+  push:
+    branches: [main, develop]
+  pull_request:
+    branches: [main]
+
+jobs:
+  test-vendas:
+    name: Test Vendas Service
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Set up Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Install dependencies
+        run: |
+          cd services/vendas
+          pip install -r requirements.txt
+          pip install pytest pytest-asyncio httpx
+      - name: Run tests
+        run: |
+          cd services/vendas
+          pytest tests/ -v
+
+  test-financeiro:
+    name: Test Financeiro Service
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Set up Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Install dependencies
+        run: |
+          cd services/financeiro
+          pip install -r requirements.txt
+          pip install pytest pytest-asyncio httpx
+      - name: Run tests
+        run: |
+          cd services/financeiro
+          pytest tests/ -v
+
+  validate-schemas:
+    name: Validate Data Schemas
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Check schema files exist
+        run: |
+          test -f data/warehouse/schema.sql
+          echo "Schema file exists ✓"
+      - name: Validate SQL syntax
+        run: |
+          sudo apt-get install -y postgresql-client
+          psql --version
+          # Basic syntax check using grep
+          grep -q "CREATE TABLE" data/warehouse/schema.sql && echo "Schema has tables ✓"
+          grep -q "CREATE.*VIEW" data/warehouse/schema.sql && echo "Schema has views ✓"

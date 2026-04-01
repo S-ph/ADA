@@ -1,0 +1,107 @@
+version: "3.9"
+
+services:
+  vendas:
+    build:
+      context: ./services/vendas
+      dockerfile: Dockerfile
+    container_name: ada-vendas
+    environment:
+      - AWS_ENDPOINT_URL=http://localstack:4566
+      - AWS_ACCESS_KEY_ID=test
+      - AWS_SECRET_ACCESS_KEY=test
+      - AWS_DEFAULT_REGION=us-east-1
+      - S3_BUCKET=ada-data-lake
+      - SQS_QUEUE_URL=http://localstack:4566/000000000000/vendas-events
+    ports:
+      - "8000:8000"
+    depends_on:
+      - localstack
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    networks:
+      - ada-network
+
+  financeiro:
+    build:
+      context: ./services/financeiro
+      dockerfile: Dockerfile
+    container_name: ada-financeiro
+    environment:
+      - AWS_ENDPOINT_URL=http://localstack:4566
+      - AWS_ACCESS_KEY_ID=test
+      - AWS_SECRET_ACCESS_KEY=test
+      - AWS_DEFAULT_REGION=us-east-1
+      - S3_BUCKET=ada-data-lake
+      - SQS_QUEUE_URL=http://localstack:4566/000000000000/financeiro-events
+    ports:
+      - "8001:8001"
+    depends_on:
+      - localstack
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8001/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    networks:
+      - ada-network
+
+  nginx:
+    build:
+      context: ./services/nginx
+      dockerfile: Dockerfile
+    container_name: ada-nginx
+    ports:
+      - "80:80"
+    depends_on:
+      - vendas
+      - financeiro
+    networks:
+      - ada-network
+
+  postgres:
+    image: postgres:15-alpine
+    container_name: ada-postgres
+    environment:
+      POSTGRES_DB: warehouse
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./data/warehouse/schema.sql:/docker-entrypoint-initdb.d/schema.sql
+    ports:
+      - "5432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - ada-network
+
+  localstack:
+    image: localstack/localstack:3.0
+    container_name: ada-localstack
+    environment:
+      - SERVICES=s3,sqs
+      - DEFAULT_REGION=us-east-1
+      - AWS_ACCESS_KEY_ID=test
+      - AWS_SECRET_ACCESS_KEY=test
+    ports:
+      - "4566:4566"
+    volumes:
+      - localstack_data:/var/lib/localstack
+      - ./infra/localstack/init-aws.sh:/etc/localstack/init/ready.d/init-aws.sh
+    networks:
+      - ada-network
+
+volumes:
+  postgres_data:
+  localstack_data:
+
+networks:
+  ada-network:
+    driver: bridge

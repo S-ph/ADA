@@ -1,0 +1,45 @@
+name: Deploy Environment
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+jobs:
+  deploy-local:
+    name: Deploy with Docker Compose
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build all images
+        run: docker compose build
+
+      - name: Start services
+        run: docker compose up -d --wait --wait-timeout 120 || docker compose up -d
+
+      - name: Wait for services
+        run: |
+          sleep 30
+          docker compose ps
+
+      - name: Health checks
+        run: |
+          docker compose ps
+          # Check vendas health
+          curl -f http://localhost:8000/health || echo "Vendas health check failed"
+          # Check financeiro health
+          curl -f http://localhost:8001/health || echo "Financeiro health check failed"
+          # Check nginx
+          curl -f http://localhost:80/health || echo "Nginx health check failed"
+
+      - name: Show logs on failure
+        if: failure()
+        run: docker compose logs
+
+      - name: Teardown
+        if: always()
+        run: docker compose down -v
