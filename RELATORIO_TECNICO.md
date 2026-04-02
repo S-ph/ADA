@@ -14,18 +14,18 @@ A arquitetura está organizada em camadas bem definidas, garantindo separação 
 
 ```mermaid
 flowchart TB
-  subgraph Servicos[Camada de Serviços]
-    Cliente[Cliente HTTP] --> Nginx[Nginx (Proxy)]
-    Nginx --> Vendas[API Vendas\nFastAPI:8000]
-    Nginx --> Financeiro[API Financeiro\nFastAPI:8001]
+  subgraph Servicos["Camada de Serviços"]
+    Cliente["Cliente HTTP"] --> Nginx["Nginx<br/>Proxy"]
+    Nginx --> Vendas["API Vendas<br/>FastAPI 8000"]
+    Nginx --> Financeiro["API Financeiro<br/>FastAPI 8001"]
   end
 
-  subgraph Dados[Camada de Dados]
-    LocalStack[LocalStack\nS3 + SQS]
-    DataLake[Data Lake (Raw)\n data/raw/*]
-    ETL[ETL Pipeline\n pipelines/etl]
-    Warehouse[Data Warehouse\nPostgreSQL:5432]
-    DataMarts[Data Marts BI\nViews]
+  subgraph Dados["Camada de Dados"]
+    LocalStack["LocalStack<br/>S3 + SQS"]
+    DataLake["Data Lake Raw<br/>data/raw/*"]
+    ETL["ETL Pipeline<br/>pipelines/etl"]
+    Warehouse["Data Warehouse<br/>PostgreSQL 5432"]
+    DataMarts["Data Marts BI<br/>Views"]
   end
 
   Vendas --> LocalStack
@@ -42,15 +42,15 @@ O fluxo inicia nas APIs operacionais, que persistem eventos de vendas e finança
 
 ```mermaid
 flowchart LR
-  Vendas[API Vendas] --> S3[LocalStack S3]
-  Financeiro[API Financeiro] --> S3
-  S3 --> Raw[Data Lake Raw]
-  Financeiro --> SQS[SQS Events]
+  Vendas["API Vendas"] --> S3["LocalStack S3"]
+  Financeiro["API Financeiro"] --> S3
+  S3 --> Raw["Data Lake Raw"]
+  Financeiro --> SQS["SQS Events"]
   Vendas --> SQS
-  SQS --> ETL[ETL Pipeline\nExtract → Transform → Load]
+  SQS --> ETL["ETL Pipeline<br/>Extract → Transform → Load"]
   Raw --> ETL
-  ETL --> DW[PostgreSQL Warehouse\ndim_* + fato_*]
-  DW --> Marts[Data Mart Views\nPerformance + Saúde]
+  ETL --> DW["PostgreSQL Warehouse<br/>dim_* + fato_*"]
+  DW --> Marts["Data Mart Views<br/>Performance + Saúde"]
 ```
 
 ## 3. Decisões Arquiteturais Detalhadas
@@ -124,13 +124,13 @@ sequenceDiagram
 
 ```mermaid
 flowchart TB
-  subgraph DockerNetwork[Docker Network: ada-network]
-    nginx[nginx:80]
-    vendas[vendas-api:8000]
-    financeiro[financeiro-api:8001]
-    localstack[localstack:4566]
-    postgres[postgres:5432]
-    etl[etl (execução manual)]
+  subgraph DockerNetwork["Docker Network - ada-network"]
+    nginx["nginx 80"]
+    vendas["vendas-api 8000"]
+    financeiro["financeiro-api 8001"]
+    localstack["localstack 4566"]
+    postgres["postgres 5432"]
+    etl["etl (execução manual)"]
   end
 
   nginx --> vendas
