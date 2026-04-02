@@ -4,7 +4,7 @@
 
 O projeto **Scale-to-Insight** materializa a migração de um e-commerce monolítico para um ecossistema de dados moderno e escalável. A solução integra uma camada operacional, responsável por processar vendas e análises financeiras em tempo real, e uma camada analítica, dedicada à consolidação, governança e consumo de dados para BI. O objetivo central é sustentar picos de tráfego, preservar o histórico transacional e habilitar inteligência de negócio contínua para a área financeira.
 
-No escopo entregue, foram implantados serviços desacoplados para Vendas e Financeiro, um proxy reverso para centralizar o tráfego, simulação de cloud com LocalStack, pipeline ETL em Python e um Data Warehouse em PostgreSQL com modelo Star Schema, além de Data Marts para consumo analítico. A arquitetura foi descrita em **README.md** e **ARQUITETURA.md**, e este relatório consolida as decisões arquiteturais e os diagramas exigidos.
+No escopo entregue, foram implantados serviços desacoplados para Vendas e Financeiro, um proxy reverso para centralizar o tráfego, simulação de cloud com LocalStack, pipeline ETL em Python e um Data Warehouse em PostgreSQL com modelo Star Schema, além de Data Marts para consumo analítico.
 
 ## 2. Arquitetura Geral
 
