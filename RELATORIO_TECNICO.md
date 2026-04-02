@@ -10,84 +10,47 @@ No escopo entregue, foram implantados serviços desacoplados para Vendas e Finan
 
 A arquitetura está organizada em camadas bem definidas, garantindo separação de responsabilidades e clareza no fluxo ponta a ponta. A camada de serviços atende às requisições HTTP e gera os eventos operacionais; a camada de infraestrutura simula serviços cloud; a camada de processamento orquestra o ETL; a camada de armazenamento consolida dados brutos e tratados; e a camada de análise entrega informações para BI.
 
-### Diagrama de Atores e Componentes (ASCII)
+### Diagrama de Atores e Componentes (Mermaid)
 
-```
-┌─────────────────────────────────────────────────────┐
-│                  CAMADA DE SERVIÇOS                 │
-│                                                     │
-│  ┌─────────┐    ┌────────────┐  ┌───────────────┐  │
-│  │ Cliente │───>│   Nginx    │─>│ API Vendas    │  │
-│  │ HTTP    │    │  (Proxy)   │  │ (FastAPI:8000)│  │
-│  └─────────┘    │            │  └───────┬───────┘  │
-│                 │            │          │           │
-│                 │            │  ┌───────▼───────┐  │
-│                 └────────────┘  │ API Financeiro│  │
-│                                 │ (FastAPI:8001)│  │
-│                                 └───────┬───────┘  │
-└─────────────────────────────────────────┼───────────┘
-                                          │
-┌─────────────────────────────────────────▼───────────┐
-│                  CAMADA DE DADOS                    │
-│                                                     │
-│  ┌───────────────┐    ┌──────────────────────────┐ │
-│  │  LocalStack   │    │    Data Lake (Raw)        │ │
-│  │  S3: s3://    │    │    data/raw/              │ │
-│  │  SQS: queues  │    │    ├── sales/             │ │
-│  └───────────────┘    │    ├── financial/         │ │
-│                        │    └── logs/              │ │
-│                        └──────────────────────────┘ │
-│                                     │               │
-│                        ┌────────────▼─────────────┐ │
-│                        │    ETL Pipeline          │ │
-│                        │    pipelines/etl/        │ │
-│                        │    ├── extract.py        │ │
-│                        │    ├── transform.py      │ │
-│                        │    └── load.py           │ │
-│                        └────────────┬─────────────┘ │
-│                                     │               │
-│                        ┌────────────▼─────────────┐ │
-│                        │  Data Warehouse           │ │
-│                        │  PostgreSQL:5432          │ │
-│                        │  ├── dim_produto          │ │
-│                        │  ├── dim_cliente          │ │
-│                        │  ├── dim_data             │ │
-│                        │  ├── fato_vendas          │ │
-│                        │  └── fato_financeiro      │ │
-│                        └────────────┬─────────────┘ │
-│                                     │               │
-│                        ┌────────────▼─────────────┐ │
-│                        │    Data Marts BI          │ │
-│                        │  ├── mart_performance_    │
-│                        │  │     vendas (View)      │
-│                        │  └── mart_saude_          │
-│                        │        financeira (View)  │
-│                        └──────────────────────────┘ │
-└─────────────────────────────────────────────────────┘
+```mermaid
+flowchart TB
+  subgraph Servicos[Camada de Serviços]
+    Cliente[Cliente HTTP] --> Nginx[Nginx (Proxy)]
+    Nginx --> Vendas[API Vendas\nFastAPI:8000]
+    Nginx --> Financeiro[API Financeiro\nFastAPI:8001]
+  end
+
+  subgraph Dados[Camada de Dados]
+    LocalStack[LocalStack\nS3 + SQS]
+    DataLake[Data Lake (Raw)\n data/raw/*]
+    ETL[ETL Pipeline\n pipelines/etl]
+    Warehouse[Data Warehouse\nPostgreSQL:5432]
+    DataMarts[Data Marts BI\nViews]
+  end
+
+  Vendas --> LocalStack
+  Financeiro --> LocalStack
+  LocalStack --> DataLake
+  DataLake --> ETL
+  ETL --> Warehouse
+  Warehouse --> DataMarts
 ```
 
-### Fluxo de Dados Completo
+### Fluxo de Dados Completo (Mermaid)
 
 O fluxo inicia nas APIs operacionais, que persistem eventos de vendas e finanças no LocalStack (S3 + SQS). Os dados brutos são armazenados no Data Lake (camada raw) e, em seguida, o pipeline ETL executa extração, transformação e carga para o PostgreSQL. Por fim, as views analíticas materializam os Data Marts consumidos pelas ferramentas de BI.
 
-```
-[API Vendas] ──┐
-               ├──> [LocalStack S3] ──> [Data Lake Raw]
-[API Financeiro]─┘        │
-       │                   └──> [SQS Events]
-       │                              │
-       └──────────────────────────────┤
-                                      ▼
-                              [ETL Pipeline]
-                             Extract → Transform → Load
-                                      │
-                                      ▼
-                            [PostgreSQL Warehouse]
-                            dim_* + fato_* tables
-                                      │
-                                      ▼
-                              [Data Mart Views]
-                            Performance + Saúde
+```mermaid
+flowchart LR
+  Vendas[API Vendas] --> S3[LocalStack S3]
+  Financeiro[API Financeiro] --> S3
+  S3 --> Raw[Data Lake Raw]
+  Financeiro --> SQS[SQS Events]
+  Vendas --> SQS
+  SQS --> ETL[ETL Pipeline\nExtract → Transform → Load]
+  Raw --> ETL
+  ETL --> DW[PostgreSQL Warehouse\ndim_* + fato_*]
+  DW --> Marts[Data Mart Views\nPerformance + Saúde]
 ```
 
 ## 3. Decisões Arquiteturais Detalhadas
@@ -134,38 +97,89 @@ O Docker Compose oferece reprodutibilidade e simplicidade no provisionamento do 
 
 ## 5. Diagrama Técnico Detalhado
 
-### 5.1 Diagrama de Sequência (Venda → Data Mart)
+### 5.1 Diagrama de Sequência (Venda → Data Mart) — Mermaid
 
 O evento de venda é recebido pela API de Vendas, persistido no S3 (LocalStack) e enfileirado no SQS. Em seguida, o ETL processa o dado bruto, transforma-o em dimensões e fatos, e o carrega no PostgreSQL. Por fim, as views do Data Mart disponibilizam a métrica para BI.
 
-```
-Cliente → API Vendas → LocalStack(S3) → Data Lake Raw
-                                  → SQS → ETL Pipeline
-ETL → PostgreSQL (fato_vendas + dimensões) → Views BI
+```mermaid
+sequenceDiagram
+  participant Cliente
+  participant Vendas as API Vendas
+  participant S3 as LocalStack S3
+  participant SQS as LocalStack SQS
+  participant ETL
+  participant DW as PostgreSQL Warehouse
+  participant BI as Data Mart Views
+
+  Cliente->>Vendas: POST /vendas
+  Vendas->>S3: Persistir evento de venda
+  Vendas->>SQS: Publicar evento
+  SQS-->>ETL: Consumir evento
+  S3-->>ETL: Ler dados brutos
+  ETL->>DW: Carregar dimensões + fatos
+  DW-->>BI: Atualizar views analíticas
 ```
 
-### 5.2 Diagrama de Deployment (Docker)
+### 5.2 Diagrama de Deployment (Docker) — Mermaid
 
-```
-[Docker Network: ada-network]
-  ├── nginx (80)
-  ├── vendas-api (8000)
-  ├── financeiro-api (8001)
-  ├── localstack (4566)
-  ├── postgres (5432)
-  └── etl (execução manual)
+```mermaid
+flowchart TB
+  subgraph DockerNetwork[Docker Network: ada-network]
+    nginx[nginx:80]
+    vendas[vendas-api:8000]
+    financeiro[financeiro-api:8001]
+    localstack[localstack:4566]
+    postgres[postgres:5432]
+    etl[etl (execução manual)]
+  end
+
+  nginx --> vendas
+  nginx --> financeiro
+  vendas --> localstack
+  financeiro --> localstack
+  localstack --> etl
+  etl --> postgres
 ```
 
-### 5.3 Diagrama de Dados (Star Schema)
+### 5.3 Diagrama de Dados (Star Schema) — Mermaid
 
-```
-dim_produto
-dim_cliente
-dim_data
-dim_financeiro
-      |
-      |---- fato_vendas
-      |---- fato_financeiro
+```mermaid
+erDiagram
+  DIM_PRODUTO ||--o{ FATO_VENDAS : produto
+  DIM_CLIENTE ||--o{ FATO_VENDAS : cliente
+  DIM_DATA ||--o{ FATO_VENDAS : data
+  DIM_FINANCEIRO ||--o{ FATO_FINANCEIRO : financeiro
+  DIM_DATA ||--o{ FATO_FINANCEIRO : data
+
+  DIM_PRODUTO {
+    string produto_id
+    string nome
+    string categoria
+  }
+  DIM_CLIENTE {
+    string cliente_id
+    string nome
+    string segmento
+  }
+  DIM_DATA {
+    date data_id
+    int ano
+    int mes
+  }
+  DIM_FINANCEIRO {
+    string conta_id
+    string categoria
+  }
+  FATO_VENDAS {
+    string venda_id
+    numeric valor
+    int quantidade
+  }
+  FATO_FINANCEIRO {
+    string lancamento_id
+    numeric valor
+    string tipo
+  }
 ```
 
 ## 6. Padrões e Princípios Aplicados
