@@ -1,0 +1,35 @@
+name: Build Docker Images
+
+on:
+  push:
+    branches: [main, develop]
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  build-vendas:
+    name: Build Vendas Service
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build Vendas Docker image
+        run: docker build -t ada-vendas:${{ github.sha }} ./services/vendas
+
+  build-financeiro:
+    name: Build Financeiro Service
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build Financeiro Docker image
+        run: docker build -t ada-financeiro:${{ github.sha }} ./services/financeiro
+
+  build-nginx:
+    name: Build Nginx
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build Nginx Docker image
+        run: docker build -t ada-nginx:${{ github.sha }} ./services/nginx
