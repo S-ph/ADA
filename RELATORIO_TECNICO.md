@@ -1,22 +1,14 @@
 # Relatório Técnico — Scale-to-Insight
 
-## 1. EXECUTIVO (Resumo)
+## 1. Executivo (Resumo)
 
-O projeto **Scale-to-Insight** propõe a migração de um monólito de e-commerce para um **ecossistema de dados moderno**, integrando uma camada operacional (APIs de vendas e finanças) com uma camada analítica (data lake + data warehouse + data marts). O objetivo central é **suportar picos de tráfego** e **gerar inteligência de negócio em tempo real** para o setor financeiro.
+O projeto **Scale-to-Insight** materializa a migração de um e-commerce monolítico para um ecossistema de dados moderno e escalável. A solução integra uma camada operacional, responsável por processar vendas e análises financeiras em tempo real, e uma camada analítica, dedicada à consolidação, governança e consumo de dados para BI. O objetivo central é sustentar picos de tráfego, preservar o histórico transacional e habilitar inteligência de negócio contínua para a área financeira.
 
-**Objetivos técnicos alcançados:**
-- Substituição do monólito por **dois serviços independentes** (Vendas e Financeiro).
-- Uso de **proxy reverso (Nginx)** como ponto de entrada.
-- Simulação de cloud com **LocalStack (S3 + SQS)**.
-- Implementação de **pipeline ETL** em Python.
-- Modelagem de **Data Warehouse** com **Star Schema** e **Data Marts**.
+No escopo entregue, foram implantados serviços desacoplados para Vendas e Financeiro, um proxy reverso para centralizar o tráfego, simulação de cloud com LocalStack, pipeline ETL em Python e um Data Warehouse em PostgreSQL com modelo Star Schema, além de Data Marts para consumo analítico. A arquitetura foi descrita em **README.md** e **ARQUITETURA.md**, e este relatório consolida as decisões arquiteturais e os diagramas exigidos.
 
-**Escopo de entrega:**
-- Infraestrutura completa com Docker/Docker Compose.
-- Arquitetura documentada no README e ARQUITETURA.md.
-- Relatório técnico com decisões arquiteturais + diagramas.
+## 2. Arquitetura Geral
 
-## 2. ARQUITETURA GERAL
+A arquitetura está organizada em camadas bem definidas, garantindo separação de responsabilidades e clareza no fluxo ponta a ponta. A camada de serviços atende às requisições HTTP e gera os eventos operacionais; a camada de infraestrutura simula serviços cloud; a camada de processamento orquestra o ETL; a camada de armazenamento consolida dados brutos e tratados; e a camada de análise entrega informações para BI.
 
 ### Diagrama de Atores e Componentes (ASCII)
 
@@ -76,6 +68,8 @@ O projeto **Scale-to-Insight** propõe a migração de um monólito de e-commerc
 
 ### Fluxo de Dados Completo
 
+O fluxo inicia nas APIs operacionais, que persistem eventos de vendas e finanças no LocalStack (S3 + SQS). Os dados brutos são armazenados no Data Lake (camada raw) e, em seguida, o pipeline ETL executa extração, transformação e carga para o PostgreSQL. Por fim, as views analíticas materializam os Data Marts consumidos pelas ferramentas de BI.
+
 ```
 [API Vendas] ──┐
                ├──> [LocalStack S3] ──> [Data Lake Raw]
@@ -96,65 +90,37 @@ O projeto **Scale-to-Insight** propõe a migração de um monólito de e-commerc
                             Performance + Saúde
 ```
 
-## 3. DECISÕES ARQUITETURAIS DETALHADAS
+## 3. Decisões Arquiteturais Detalhadas
 
 ### 3.1 FastAPI vs Flask
-- **Problema identificado:** necessidade de APIs rápidas, tipadas e com documentação automática.
-- **Opções consideradas:** Flask ou FastAPI.
-- **Solução adotada:** FastAPI.
-- **Justificativa:** performance superior, suporte async, validação Pydantic e OpenAPI.
-- **Trade-offs:** curva de aprendizado ligeiramente maior.
-- **Impacto na arquitetura:** APIs modernas, padronizadas e escaláveis.
+
+A decisão por FastAPI foi motivada pela necessidade de alto desempenho, documentação automática e validação estrita de payloads. Embora Flask seja simples e popular, ele exigiria mais trabalho para validação, documentação e suporte a async. FastAPI oferece Pydantic e OpenAPI nativamente, reduzindo esforço de desenvolvimento e aumentando a confiabilidade do contrato das APIs. O trade-off é uma curva de aprendizado ligeiramente maior, compensada pelo ganho de produtividade e performance.
 
 ### 3.2 PostgreSQL como Data Warehouse
-- **Problema identificado:** necessidade de analytics com integridade transacional.
-- **Opções consideradas:** PostgreSQL, MySQL, soluções cloud.
-- **Solução adotada:** PostgreSQL 15.
-- **Justificativa:** ACID, suporte a Views e Star Schema, open-source.
-- **Trade-offs:** menor elasticidade comparado a soluções cloud.
-- **Impacto na arquitetura:** data marts consistentes e consultas analíticas confiáveis.
+
+O PostgreSQL foi escolhido como Data Warehouse pela aderência a propriedades ACID, forte suporte a views e boa compatibilidade com o modelo Star Schema. Alternativas cloud poderiam oferecer elasticidade, porém com custos adicionais e maior complexidade. A decisão privilegia a robustez e o baixo custo, com impacto direto na consistência das consultas analíticas.
 
 ### 3.3 LocalStack vs Cloud Real (AWS)
-- **Problema identificado:** simulação de serviços cloud com custo zero.
-- **Opções consideradas:** AWS Free Tier ou LocalStack.
-- **Solução adotada:** LocalStack.
-- **Justificativa:** desenvolvimento local, sem custos, portável.
-- **Trade-offs:** limitações frente à AWS real.
-- **Impacto na arquitetura:** ambiente totalmente reproduzível em Docker.
+
+A simulação de serviços cloud com LocalStack garante um ambiente local reproduzível, sem custos e fácil de versionar. Embora não replique 100% da AWS real, é suficiente para o escopo acadêmico e acelera a entrega. O trade-off é a eventual necessidade de ajustes ao migrar para cloud real, mas o benefício imediato é a simplicidade do desenvolvimento local.
 
 ### 3.4 Python Scripts + Airflow DAGs
-- **Problema identificado:** ETL precisa ser simples localmente e escalável em produção.
-- **Opções consideradas:** apenas scripts ou somente Airflow.
-- **Solução adotada:** Python scripts + DAG Airflow.
-- **Justificativa:** execução manual rápida + orquestração futura.
-- **Trade-offs:** manutenção dupla (scripts + DAGs).
-- **Impacto na arquitetura:** flexibilidade no desenvolvimento e produção.
 
-### 3.5 Star Schema vs Dimensional Modeling
-- **Problema identificado:** modelo de dados analítico eficiente.
-- **Opções consideradas:** snowflake, 3NF ou star schema.
-- **Solução adotada:** Star Schema.
-- **Justificativa:** simplicidade e desempenho analítico.
-- **Trade-offs:** redundância de dados.
-- **Impacto na arquitetura:** otimização para BI.
+O pipeline ETL foi estruturado com scripts Python para execução manual e, adicionalmente, preparado para orquestração via DAGs do Airflow. Isso equilibra simplicidade no desenvolvimento e escalabilidade no futuro. A manutenção de dois artefatos pode gerar overhead, mas garante flexibilidade para ambientes distintos (local vs produção).
+
+### 3.5 Star Schema
+
+O Star Schema foi adotado por sua eficiência em consultas analíticas e pela simplificação de joins. Embora introduza redundância, ele é amplamente aceito por ferramentas de BI e permite consultas rápidas e intuitivas. Esse modelo atende diretamente aos requisitos de Data Mart de performance de vendas e saúde financeira.
 
 ### 3.6 Nginx como Proxy Reverso
-- **Problema identificado:** unificar entrada e gerenciar tráfego.
-- **Opções consideradas:** API Gateway dedicado ou Nginx.
-- **Solução adotada:** Nginx.
-- **Justificativa:** simples, leve, suporte a load balancing.
-- **Trade-offs:** menos recursos avançados comparado a gateways cloud.
-- **Impacto na arquitetura:** escalabilidade horizontal pronta.
+
+O Nginx foi escolhido por sua leveza e capacidade de atuar como ponto de entrada único, simplificando o roteamento entre serviços e habilitando balanceamento de carga. A alternativa seria um API Gateway completo, porém isso aumentaria a complexidade sem ganhos proporcionais no contexto do projeto. O impacto é uma arquitetura mais simples e pronta para escalar horizontalmente.
 
 ### 3.7 Docker Compose para Orquestração Local
-- **Problema identificado:** necessidade de ambiente reproduzível local.
-- **Opções consideradas:** Kubernetes ou Compose.
-- **Solução adotada:** Docker Compose.
-- **Justificativa:** simplicidade, setup rápido, ideal para projeto acadêmico.
-- **Trade-offs:** não adequado para produção complexa.
-- **Impacto na arquitetura:** onboarding rápido e padronizado.
 
-## 4. COMPONENTES E RESPONSABILIDADES
+O Docker Compose oferece reprodutibilidade e simplicidade no provisionamento do ambiente local, atendendo plenamente ao requisito de entrega. Kubernetes foi considerado, mas seria excessivo para o escopo atual. Assim, o Compose viabiliza onboarding rápido e garante previsibilidade na execução do projeto.
+
+## 4. Componentes e Responsabilidades
 
 | Componente | Tecnologia | Porta | Função |
 |---|---|---|---|
@@ -166,9 +132,11 @@ O projeto **Scale-to-Insight** propõe a migração de um monólito de e-commerc
 | Data Warehouse | PostgreSQL | 5432 | Star Schema, dimensões e fatos |
 | Data Marts | SQL Views | N/A | Performance Vendas, Saúde Financeira |
 
-## 5. DIAGRAMA TÉCNICO DETALHADO
+## 5. Diagrama Técnico Detalhado
 
 ### 5.1 Diagrama de Sequência (Venda → Data Mart)
+
+O evento de venda é recebido pela API de Vendas, persistido no S3 (LocalStack) e enfileirado no SQS. Em seguida, o ETL processa o dado bruto, transforma-o em dimensões e fatos, e o carrega no PostgreSQL. Por fim, as views do Data Mart disponibilizam a métrica para BI.
 
 ```
 Cliente → API Vendas → LocalStack(S3) → Data Lake Raw
@@ -192,61 +160,30 @@ ETL → PostgreSQL (fato_vendas + dimensões) → Views BI
 
 ```
 dim_produto
- dim_cliente
- dim_data
- dim_financeiro
+dim_cliente
+dim_data
+dim_financeiro
       |
       |---- fato_vendas
       |---- fato_financeiro
 ```
 
-## 6. PADRÕES E PRINCÍPIOS APLICADOS
+## 6. Padrões e Princípios Aplicados
 
-- **Microserviços:** separação Vendas ↔ Financeiro
-- **API-First:** interfaces RESTful padronizadas
-- **Stateless:** serviços prontos para scaling horizontal
-- **ACID:** garantias transacionais no warehouse
-- **ELT Pattern:** dados brutos preservados, transformação posterior
-- **Isolamento de Rede:** Docker networks isoladas
+A solução segue princípios de microserviços, API-first e stateless para facilitar escalabilidade e manutenção. O padrão ELT garante preservação do dado bruto, enquanto o uso de ACID no warehouse assegura consistência analítica. O isolamento por redes Docker contribui para a segurança e para o controle do ambiente.
 
-## 7. ESCALABILIDADE
+## 7. Escalabilidade
 
-- **Nginx** permite múltiplas instâncias de serviço.
-- **Data Lake** suporta crescimento histórico ilimitado.
-- **Views** podem ser materializadas para BI.
-- **Particionamento** possível em tabelas de fatos.
+O Nginx permite distribuição de carga entre múltiplas instâncias de APIs, preparando o caminho para escalabilidade horizontal. O Data Lake suporta crescimento histórico, enquanto o uso de views e possível materialização aceleram consultas analíticas. A arquitetura também permite particionamento futuro das tabelas de fatos, reduzindo custos de consulta.
 
-## 8. SEGURANÇA E BOAS PRÁTICAS
+## 8. Segurança e Boas Práticas
 
-- Variáveis de ambiente para credenciais.
-- Validação de input (Pydantic).
-- Health checks nos serviços.
-- Sem secrets hardcoded.
-- Redes Docker isoladas.
+As credenciais são tratadas via variáveis de ambiente, evitando hardcoding. A validação dos payloads é feita com Pydantic, reduzindo risco de inconsistências. Health checks e redes isoladas reforçam a robustez operacional do ambiente.
 
-## 9. CI/CD E AUTOMAÇÃO
+## 9. CI/CD e Automação
 
-Workflows descritos no README:
-- **build.yml** — build imagens Docker
-- **test.yml** — testes unitários e schemas
-- **deploy.yml** — deploy local com Compose
+O repositório define pipelines para build, testes e deploy local. Esses workflows garantem que imagens Docker sejam geradas corretamente, que schemas e testes sejam validados e que o ambiente possa ser provisionado de forma previsível.
 
-## 10. CONCLUSÕES
+## 10. Conclusões
 
-A solução **atende integralmente o enunciado do Projeto Final**, incluindo:
-- Duas APIs de microserviço
-- Proxy reverso
-- Simulação de cloud com LocalStack
-- Pipeline ETL completo
-- Data Lake + Warehouse + Data Mart
-- Automação CI/CD
-
-**Pontos fortes:**
-- Arquitetura clara e escalável
-- Integração total entre operação e analytics
-- Documentação rica
-
-**Possíveis melhorias futuras:**
-- Migrar LocalStack → AWS real
-- Orquestrar ETL com Airflow completo
-- Adicionar observabilidade (logs/metrics/traces)
+A solução atende integralmente aos requisitos do Projeto Final, entregando uma arquitetura moderna, escalável e bem documentada. A separação de serviços, a integração com pipelines de dados e o modelo analítico em Star Schema mostram aderência às boas práticas de engenharia de dados e software. Como evolução, recomenda-se migrar o LocalStack para serviços cloud reais, orquestrar ETLs com Airflow completo e incorporar observabilidade para monitoramento contínuo.
